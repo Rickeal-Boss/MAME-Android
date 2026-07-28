@@ -24,6 +24,7 @@
 - TV 导航：<https://developer.android.com/training/tv/get-started/navigation>
 - 管理 TV 手柄：<https://developer.android.com/training/tv/get-started/controllers>
 - 手柄输入处理：<https://developer.android.com/games/sdk/game-controller/controller-input>
+- 多手柄（1–4 玩家）支持：<https://developer.android.com/games/sdk/game-controller/multiple-controllers>
 
 ---
 
@@ -38,7 +39,7 @@
 - 新增静态标志 `gamepadConnected` / `xboxConnected`，通过 `InputManager.InputDeviceListener` 在**手柄加入/移除的瞬间**扫描所有输入设备并刷新状态（不再依赖“首次按键后才生效”）。
 - 新增 `isXboxName()`：覆盖 `Xbox Wireless Controller`、`Xbox One Controller`、`Xbox Bluetooth Gamepad`、`Xbox Elite`、`Xbox Adaptive`、`Microsoft Xbox` 等上报名。
 - 新增 `isGamepadConnected()` / `isXboxConnected()` 供自动隐藏逻辑查询。
-- `onInputDeviceAdded`：连接即弹出提示（Xbox 显示专属文案），并触发 `updateMAME4droid()`。
+- `onInputDeviceAdded`：识别为手柄后**即时在 UI 线程调用 `checkAndRegisterDevice(dev)`**，将设备绑定到第一个空闲玩家槽位（P1–P4）并弹出 “Detected XBox controller as Pn”；不再依赖首次按键。多人热插拔的细节见 2.8 节。
 - `onInputDeviceRemoved`：断开时刷新状态并恢复屏幕控制；移除 `return` 改为 `break`，保证通用手柄（未占 slot）断开时也能恢复 UI。
 - `detectDevice()` 的 Xbox 分支改用 `isXboxName()` 匹配，并置位 `xboxConnected`。
 
@@ -56,7 +57,7 @@
 ### 2.5 `helpers/PrefsHelper.java`
 - 新增常量 `PREF_HIDE_ON_PAD` 与 `isHideOnPad()`（默认 `true`）。
 
-### 2.6 资源与设置 UI
+### 2.7 资源与设置 UI
 - `res/xml/userpreferences.xml`：在外接手柄设置页新增开关 `Auto-hide controls on gamepad`。
 - `res/values/strings.xml` 与 `res/values-zh/strings.xml`：新增 `xbox_connected`、`gamepad_connected`、`pref_hide_on_pad_title`、`pref_hide_on_pad_summary`。
 - `input/GameController.java`：在 `handleGameController()` 开头拦截 TV 遥控方向键，新增 `isTvRemoteDpad()` / `handleTvDpad()` 双模式分发；`input/InputHandler.java`：`isHideTouchController()` 在 Android TV 上始终隐藏屏幕触摸控制。
@@ -66,7 +67,7 @@
 
 ---
 
-## 2.5 遥控器方向键双模式（TV Remote D-pad Dual Mode）
+### 2.6 遥控器方向键双模式（TV Remote D-pad Dual Mode）
 
 ### 背景与根因
 Android TV 遥控器的方向键事件来源是 `SOURCE_DPAD` / `SOURCE_KEYBOARD`，**不是** 手柄路径所期望的
@@ -92,6 +93,38 @@ Android TV 遥控器的方向键事件来源是 `SOURCE_DPAD` / `SOURCE_KEYBOARD
 
 ### 设置入口
 `Settings → Game controller → TV remote D-pad mode`（ListPreference，en + zh 文案，选项：Auto / Mouse-pointer simulation / Direct key navigation）。
+
+---
+
+### 2.8 USB / Xbox 实体手柄与 1–4 人多人适配
+
+#### 背景与根因
+Android TV 通常提供**多个 USB 接口**，可同时外接 2–4 个 Xbox One / 兼容手柄；而 FC/NES 类被模拟游戏天然支持单屏多人（一台机子对应 P1–P4）。原实现只有在玩家**首次按下某手柄的按键/扳机**时才把该设备绑定到 P1–P4 槽位（`deviceIDs[]`），导致：
+- 启动游戏前插好 4 个手柄，进入游戏后没有任何一个被识别，必须逐个戳一下任意键/扳机。
+- 在 MAME 自渲染 OSD 里无法直观确认“哪根手柄是 P2”。
+
+官方 Android Developers 多手柄指南明确要求：用 `InputDevice.getDeviceIds()` 枚举设备，用 `getDescriptor()` 做持久身份（重连后不变），并在 `onInputDeviceAdded()` / `onInputDeviceRemoved()` 回调里**即时**维护“设备 → 玩家”映射，按 `event.getDeviceId()` 分流每个玩家输入。本项目已有的 `MAX_DEVICES = 4` + `deviceIDs[]` 玩家槽模型本就契合该模式，唯一缺口是**热插拔时未即时绑槽**。
+
+#### 实现
+在 `GameController.onInputDeviceAdded()` 中，识别为手柄（`SOURCE_GAMEPAD` 或 `SOURCE_CLASS_JOYSTICK`）后**立即在 UI 线程调用 `checkAndRegisterDevice(dev)`**：
+- `checkAndRegisterDevice()` → `registerGenericController()`（通用路径）或 `detectDevice()`（自动识别路径）会自动把设备绑到第一个空闲槽位（P1–P4），并弹出 **“Detected XBox controller as P2”** 提示。
+- 因此把 2–4 个手柄插上 TV 的瞬间，每个手柄已被分配到明确玩家号，**无需再按任意键**，多人游戏可直接开始。
+
+同时新增 **Xbox Guide 键**（`KEYCODE_BUTTON_MODE`，即 Xbox 中央按钮）映射：在 `handleGameController()` 的 Dynamic Bridge 回退分支中拦截，将其映射到 MAME 选项菜单（`OPTION_VALUE`），让中央键在游戏内可用（系统未拦截该键时）。
+
+#### 官方文档依据
+- Android Developers — 多手柄支持：<https://developer.android.com/games/sdk/game-controller/multiple-controllers>
+- Android Developers — 手柄输入处理：<https://developer.android.com/games/sdk/game-controller/controller-input>
+- 微软官方 — Xbox 无线手柄在 Android 上以**标准 HID 游戏手柄**出现（USB 有线 / 蓝牙），无需驱动；Guide 中央键对应 `KEYCODE_BUTTON_MODE`。
+
+> 注：微软支持页面为 JS 渲染，WebFetch 无法直接抓取正文，但其“即插即用标准 HID + Guide=`BUTTON_MODE`”为业界公认行为，已据此实现；后续若需更精确指南键文案，可手动核对 <https://support.xbox.com/help/hardware-network/accessories/xbox-controller-functionality-operating-systems>。
+
+#### 行为验证清单（多人）
+- [ ] 在 Android TV 上插入 2 个 Xbox 手柄 → 立即弹出 “Detected XBox controller as P1 / P2”，无需按键。
+- [ ] 插入第 3、4 个手柄 → 依次分配 P3、P4；第 5 个因 `MAX_DEVICES = 4` 显示 “Unassigned (Max 4)”。
+- [ ] 拔出 P2 → 弹出 “Disconnected controller (P2)”，槽位释放；其余玩家不受影响、游戏不闪断（Activity 因 `configChanges` 不重启）。
+- [ ] 重新插入同一手柄 → 经由 `getDescriptor()` 仍映射到原玩家号（若槽位仍空闲）。
+- [ ] 游戏内按 Xbox Guide（中央）键 → 打开 MAME 选项菜单（系统未拦截时）。
 
 ---
 
@@ -131,6 +164,7 @@ Android TV 遥控器的方向键事件来源是 `SOURCE_DPAD` / `SOURCE_KEYBOARD
 - [ ] **拔出 Xbox 手柄** → 虚拟按键自动恢复（若 `Landscape touch controller` 开启）。
 - [ ] 在设置中关闭 `Auto-hide controls on gamepad` 后，连接手柄不再自动隐藏（尊重用户选择）。
 - [ ] 热插拔手柄过程中 Activity 不重启（画面不闪断）。
+- [ ] **多人**：TV 上一次插入 2–4 个 Xbox 手柄，立刻各分配 P1–P4（无需按任何键）；详见 2.8 节验证清单。
 
 ---
 

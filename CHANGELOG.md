@@ -32,6 +32,19 @@ Android TV (16:9) & Xbox One controller adaptation of MAME4droid-current.
     (no-touch device), fixing the pure-remote scenario where no gamepad is present.
   - `PREF_TV_DPAD_MODE` preference (ListPreference) under "External controller", with en + zh
     title/summary and entry arrays (Auto / Mouse-pointer simulation / Direct key navigation).
+- **USB / Xbox physical multi-controller (1–4 players)**
+  - Root cause: `onInputDeviceAdded()` only refreshed the connect toast and bound a
+    player slot on the *first* key/axis event, so plugging 2–4 Xbox/USB pads into a TV
+    before launch left them all unassigned until each was poked.
+  - `GameController.onInputDeviceAdded()` now eagerly calls `checkAndRegisterDevice(dev)`
+    on the UI thread the instant a gamepad (GAMEPAD / JOYSTICK source) is attached, so each
+    pad is bound to the first free slot (P1–P4) and announced ("Detected XBox controller as P2")
+    without requiring any key press — matches the Android Developers multi-controller pattern.
+  - `GameController.handleGameController()` Dynamic Bridge fallback now maps the Xbox Guide
+    button (`KEYCODE_BUTTON_MODE`, the center button) to the MAME options menu (`OPTION_VALUE`)
+    when delivered.
+  - Disconnect still frees the slot (`onInputDeviceRemoved`) and shows "Disconnected controller (Pn)";
+    `MAX_DEVICES = 4` caps at 4 players with "Unassigned (Max 4)" beyond that.
 
 ### Build / CI fixes
 - `scripts/build_mame_core.sh`: fixed `NDK_PROJECT_PATH` (was pointing one `jni/`
@@ -44,7 +57,7 @@ Android TV (16:9) & Xbox One controller adaptation of MAME4droid-current.
 
 ### Files changed
 - `AndroidManifest.xml` — leanback / gamepad / touchscreen features + configChanges
-- `GameController.java` — connection-state tracking, Xbox detection, TV remote D-pad dual-mode
+- `GameController.java` — connection-state tracking, Xbox detection, TV remote D-pad dual-mode, multi-controller hot-plug (1–4 players) + Xbox Guide button map
 - `InputHandler.java` — auto-hide logic (TV) + TV remote D-pad dispatch hook
 - `MainHelper.java` — TV defaults & InputView visibility (`PREF_TV_DPAD_MODE` init)
 - `PrefsHelper.java` — `PREF_HIDE_ON_PAD`, `PREF_TV_DPAD_MODE`

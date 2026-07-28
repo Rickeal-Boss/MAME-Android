@@ -153,81 +153,83 @@ public class GameController implements IController {
 		if (inputManager != null) {
 			// Attach to MainLooper to ensure UI messages are safely dispatched on the main thread
 			inputManager.registerInputDeviceListener(new InputManager.InputDeviceListener() {
-				@Override
-				public void onInputDeviceAdded(int deviceId) {
-					InputDevice dev = InputDevice.getDevice(deviceId);
-					refreshGamepadConnected();
+			@Override
+			public void onInputDeviceAdded(int deviceId) {
+				final InputDevice dev = InputDevice.getDevice(deviceId);
+				refreshGamepadConnected();
 
-					boolean isGamepad = false;
-					if (dev != null) {
-						int src = dev.getSources();
-						isGamepad = (src & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
-							|| (src & InputDevice.SOURCE_CLASS_JOYSTICK) == InputDevice.SOURCE_CLASS_JOYSTICK;
-					}
-
-					if (isGamepad) {
-						final boolean xbox = isXboxName(dev != null ? dev.getName() : null);
-						mm.runOnUiThread(new Runnable() {
-							@Override
-							public void run() {
-								String msg = mm.getString(xbox
-									? R.string.xbox_connected
-									: R.string.gamepad_connected);
-								new WarnWidget.WarnWidgetHelper(mm, msg, 3, Color.GREEN, true);
-								mm.getMainHelper().updateMAME4droid();
-							}
-						});
-					}
+				boolean isGamepad = false;
+				if (dev != null) {
+					int src = dev.getSources();
+					isGamepad = (src & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+						|| (src & InputDevice.SOURCE_CLASS_JOYSTICK) == InputDevice.SOURCE_CLASS_JOYSTICK;
 				}
 
-				@Override
-				public void onInputDeviceRemoved(int deviceId) {
-					banDev.delete(deviceId);
-					genericControllers.remove(deviceId);
-
-					boolean wasGamepad = false;
-					for (int i = 0; i < MAX_DEVICES; i++) {
-						if (deviceIDs[i] == deviceId) {
-							deviceIDs[i] = -1; // Free up the player slot
-							joystickMotion = false;
-							wasGamepad = true;
-
-							Emulator.setDigitalData(i, 0);
-							Emulator.setAnalogData(Emulator.LEFT_STICK_DATA, i, 0.0f, 0.0f);
-							Emulator.setAnalogData(Emulator.RIGHT_STICK_DATA, i, 0.0f, 0.0f);
-							Emulator.setAnalogData(Emulator.TRIGGER_DATA, i, 0.0f, 0.0f);
-
-							final int playerNum = i + 1;
-
-							mm.runOnUiThread(new Runnable() {
-								@Override
-								public void run() {
-									String msg = mm.getString(R.string.controller_disconnected, playerNum);
-									new WarnWidget.WarnWidgetHelper(mm, msg, 3, Color.YELLOW, true);
-									mm.getMainHelper().updateMAME4droid();
-								}
-							});
-							break;
+				if (isGamepad) {
+					// Eagerly bind the controller to the next free player slot
+					// (P1-P4) the instant it is attached, instead of waiting for the
+					// first button press. This is what makes plugging several Xbox /
+					// USB gamepads into an Android TV's hub before launching a 2-4
+					// player game behave predictably: each pad is announced
+					// ("Detected XBox controller as P2") and assigned immediately.
+					mm.runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							checkAndRegisterDevice(dev);
+							mm.getMainHelper().updateMAME4droid();
 						}
-					}
+					});
+				}
+			}
 
-					refreshGamepadConnected();
+			@Override
+			public void onInputDeviceRemoved(int deviceId) {
+				banDev.delete(deviceId);
+				genericControllers.remove(deviceId);
 
-					// If no player slot was freed (e.g. a generic/non-autodetected
-					// gamepad or a keyboard/mouse unplugged) we still refresh the
-					// touch UI so the on-screen controls re-appear when the last
-					// physical pad goes away.
-					if (!wasGamepad) {
+				boolean wasGamepad = false;
+				for (int i = 0; i < MAX_DEVICES; i++) {
+					if (deviceIDs[i] == deviceId) {
+						deviceIDs[i] = -1; // Free up the player slot
+						joystickMotion = false;
+						wasGamepad = true;
+
+						Emulator.setDigitalData(i, 0);
+						Emulator.setAnalogData(Emulator.LEFT_STICK_DATA, i, 0.0f, 0.0f);
+						Emulator.setAnalogData(Emulator.RIGHT_STICK_DATA, i, 0.0f, 0.0f);
+						Emulator.setAnalogData(Emulator.TRIGGER_DATA, i, 0.0f, 0.0f);
+
+						final int playerNum = i + 1;
+
 						mm.runOnUiThread(new Runnable() {
 							@Override
 							public void run() {
+								String msg = mm.getString(R.string.controller_disconnected, playerNum);
+								new WarnWidget.WarnWidgetHelper(mm, msg, 3, Color.YELLOW, true);
 								mm.getMainHelper().updateMAME4droid();
 							}
 						});
+						break;
 					}
 				}
-				@Override
-				public void onInputDeviceChanged(int deviceId) {}
+
+				refreshGamepadConnected();
+
+				// If no player slot was freed (e.g. a generic/non-autodetected
+				// gamepad or a keyboard/mouse unplugged) we still refresh the
+				// touch UI so the on-screen controls re-appear when the last
+				// physical pad goes away.
+				if (!wasGamepad) {
+					mm.runOnUiThread(new Runnable() {
+						@Override
+						public void run() {
+							mm.getMainHelper().updateMAME4droid();
+						}
+					});
+				}
+			}
+			@Override
+			public void onInputDeviceChanged(int deviceId) {}
 			}, new android.os.Handler(android.os.Looper.getMainLooper()));
 		}
 		resetAutodetected();
@@ -719,6 +721,13 @@ public class GameController implements IController {
 			}
 			if (event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
 				handleControllerKey(15, event, digital_data);
+				return true;
+			}
+			if (event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_MODE) {
+				// Xbox "Guide" / center button (and similar). The Android TV system
+				// may intercept it for the launcher, but when delivered we map it to
+				// the MAME options menu so it is useful in-game.
+				handleControllerKey(OPTION_VALUE, event, digital_data);
 				return true;
 			}
 			if ((event.getKeyCode() == KeyEvent.KEYCODE_BUTTON_START || event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER
