@@ -67,6 +67,29 @@ To save internal space and ensure fast boot times, it is highly recommended to s
 
 ---
 
+## 📺 Android TV (16:9) & Xbox One 适配
+
+本分支在 MAME4droid-current 基础上针对 **16:9 Android TV** 与 **Xbox One 手柄**做了专项适配：
+
+- 声明 `android.software.leanback`（required=false），单 APK 同时支持手机与 TV；
+- 主 Activity 的 `configChanges` 增加 `keyboard|keyboardHidden|navigation`，避免手柄热插拔时 Activity 重建；
+- 检测到 Android TV 时默认开启 overscan 安全区、横屏锁定、连接手柄隐藏虚拟按键；
+- 通过 `InputDeviceListener` 跟踪手柄连接状态，Xbox One 连接时**自动隐藏屏幕虚拟按键**（设置项 `PREF_HIDE_ON_PAD`，默认开启）。
+
+详见 [`TV_XBOX_ADAPTATION.md`](TV_XBOX_ADAPTATION.md) 与变更记录 [`CHANGELOG.md`](CHANGELOG.md)。
+
+## 🔧 构建与 CI（Build & GitHub Actions）
+
+> 本仓库仅含 **Android 包装层 + MAME OSD 修改层（`src/`）**。MAME 核心源码在构建时下载。
+
+完整构建说明见 [`BUILD.md`](BUILD.md)。要点：
+
+1. `scripts/prepare_mame_src.sh 0.288` —— 下载 MAME 0.288 源码、应用 `src/` 下补丁、覆盖 `myosd` OSD；
+2. `scripts/build_mame_core.sh` —— NDK 编译 MAME 核心 `.so` 并复制到 `jniLibs`；
+3. `./gradlew assembleDebug` —— Gradle 打包 APK。
+
+GitHub Actions（[`.github/workflows/build.yml`](.github/workflows/build.yml)）在推送 `main`、打 `v*` 标签或手动触发时自动执行上述流程，上传 APK 构件，并在打标签时把 APK 挂到对应 Release。
+
 ## 📜 License
 
 Copyright (C) 1997-2026 MAMEDev and contributors.

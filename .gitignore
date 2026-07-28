@@ -1,0 +1,35 @@
+# ---- Android / Gradle build outputs ----
+*.apk
+*.aab
+*.aar
+*.ap_
+*.dex
+*.class
+
+.gradle/
+build/
+.externalNativeBuild/
+.cxx/
+
+# IntelliJ / Android Studio
+.idea/
+*.iml
+navigation/
+captures/
+
+# Local SDK / signing config
+local.properties
+*.jks
+*.keystore
+
+# NDK build artifacts
+obj/
+libs/
+jniLibs/
+
+# ---- MAME core source (downloaded by scripts/prepare_mame_src.sh) ----
+android-MAME4droid/app/src/main/jni/MAME-src/
+
+# ---- OS-specific ----
+.DS_Store
+Thumbs.db
