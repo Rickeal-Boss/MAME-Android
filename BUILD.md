@@ -64,6 +64,11 @@ The APK lands in `app/build/outputs/apk/debug/` (or `release/`). The JNI shim
 `libmame4droid-jni.so` is built by Gradle's `externalNativeBuild`; the MAME
 core `libmame*.so` (from step 2) is packaged from `jniLibs/`.
 
+> **Gradle wrapper:** this snapshot does not ship the Gradle wrapper
+> (`gradle/wrapper/`), so run Gradle via a locally installed distribution, e.g.
+> `gradle assembleDebug` (or let CI download Gradle 8.9 via `gradle-version`).
+> `gradle.properties` is tuned for JDK 17 (no `MaxPermSize`).
+
 ## GitHub Actions (CI)
 
 `.github/workflows/build.yml` automates the whole pipeline on every push to
@@ -72,9 +77,15 @@ core `libmame*.so` (from step 2) is packaged from `jniLibs/`.
 1. Sets up JDK 17 + Android SDK (platform-36, build-tools) + NDK 28.2.13676358.
 2. Runs `scripts/prepare_mame_src.sh`.
 3. Runs `scripts/build_mame_core.sh`.
-4. Runs `gradle assembleDebug`.
+4. Runs `gradle assembleDebug` (Gradle 8.9 is downloaded directly via the
+   action's `gradle-version`, since the repo has no wrapper).
 5. Uploads the APK as a build artifact.
 6. On a tag push, attaches the APK to the corresponding GitHub Release.
+
+> **CI compiles the app + JNI shim** (`build_mame_core.sh` builds the shim and
+> warns when no `libmame*.so` is produced). A *runnable* APK additionally needs
+> the core `.so` from step 2, so supply your core ndk entry in
+> `scripts/build_mame_core.sh` for releases.
 
 To run it manually: **Actions → Build APK → Run workflow**.
 

@@ -33,6 +33,15 @@ Android TV (16:9) & Xbox One controller adaptation of MAME4droid-current.
   - `PREF_TV_DPAD_MODE` preference (ListPreference) under "External controller", with en + zh
     title/summary and entry arrays (Auto / Mouse-pointer simulation / Direct key navigation).
 
+### Build / CI fixes
+- `scripts/build_mame_core.sh`: fixed `NDK_PROJECT_PATH` (was pointing one `jni/`
+  too deep, causing `jni/jni/Android.mk` "unknown file") so the JNI shim builds.
+- `.github/workflows/build.yml`: use `build-root-directory` + `gradle-version: 8.9`
+  (repo ships no Gradle wrapper) so `assembleDebug` actually runs in CI.
+- `gradle.properties`: removed `-XX:MaxPermSize=512m` (invalid on JDK 17) which
+  prevented the Gradle daemon from starting. `assembleDebug` now builds successfully;
+  the full MAME core `.so` still requires a local/core build entry (see `BUILD.md`).
+
 ### Files changed
 - `AndroidManifest.xml` — leanback / gamepad / touchscreen features + configChanges
 - `GameController.java` — connection-state tracking, Xbox detection, TV remote D-pad dual-mode
