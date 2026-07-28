@@ -27,17 +27,22 @@ NDK="${ANDROID_NDK_HOME:-${ANDROID_NDK_ROOT:-}}"
 
 echo "==> Using NDK: $NDK"
 
+# ndk-build expects NDK_PROJECT_PATH to be the project ROOT that contains a
+# `jni/Android.mk`. The JNI shim's Android.mk lives at app/src/main/jni/Android.mk,
+# so the project root is app/src/main (NOT app/src/main/jni).
+APP_MAIN="$REPO_ROOT/android-MAME4droid/app/src/main"
+
 # Build the JNI shim (Android.mk in app/src/main/jni).
 if [ -f "$JNI/Android.mk" ]; then
-  echo "==> ndk-build: JNI shim ($JNI)"
-  ( cd "$JNI" && "$NDK/ndk-build" APP_ABI=arm64-v8a NDK_PROJECT_PATH="$JNI" )
+  echo "==> ndk-build: JNI shim ($APP_MAIN)"
+  ( cd "$APP_MAIN" && "$NDK/ndk-build" APP_ABI=arm64-v8a APP_PLATFORM=android-29 NDK_PROJECT_PATH="$APP_MAIN" )
 fi
 
 # Build the MAME core if a core Android.mk is present in the prepared source.
 # NOTE: adjust the path / invocation to match your local MAME core build.
 if [ -f "$MAME_SRC/jni/Android.mk" ]; then
-  echo "==> ndk-build: MAME core ($MAME_SRC/jni)"
-  ( cd "$MAME_SRC" && "$NDK/ndk-build" APP_ABI=arm64-v8a NDK_PROJECT_PATH="$MAME_SRC/jni" )
+  echo "==> ndk-build: MAME core ($MAME_SRC)"
+  ( cd "$MAME_SRC" && "$NDK/ndk-build" APP_ABI=arm64-v8a APP_PLATFORM=android-29 NDK_PROJECT_PATH="$MAME_SRC" )
 elif [ -f "$MAME_SRC/makefile" ]; then
   echo "==> MAME core uses its own makefile — invoke your core build command here."
   echo "    e.g. ( cd \"$MAME_SRC\" && <your ndk/make build command> )"
