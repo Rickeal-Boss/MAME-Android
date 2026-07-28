@@ -1087,6 +1087,9 @@ galaxy sde	   --> 2560x1600 16:10
                 // 16:9 TV tuning: keep a safe overscan margin so the picture is
                 // never clipped by the bezel, and lock landscape orientation.
                 edit.putBoolean(PrefsHelper.PREF_GLOBAL_OVERSCAN, true);
+                // Remote D-pad defaults to Auto: mouse-pointer simulation inside
+                // mouse-enabled games, direct key navigation everywhere else.
+                edit.putString(PrefsHelper.PREF_TV_DPAD_MODE, "0");
                 edit.putString(PrefsHelper.PREF_ORIENTATION, "2");
 
                 edit.putString(PrefsHelper.PREF_EMU_RESOLUTION, "1");

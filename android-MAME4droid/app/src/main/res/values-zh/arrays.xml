@@ -25,6 +25,17 @@
 		<item>非常高</item>
 	</string-array>
 
+	<string-array name="pref_tv_dpad_mode_entries">
+		<item>自动</item>
+		<item>模拟鼠标指针</item>
+		<item>直接按键导航</item>
+	</string-array>
+	<string-array name="pref_tv_dpad_mode_values">
+		<item>0</item>
+		<item>1</item>
+		<item>2</item>
+	</string-array>
+
 	<string-array name="pref_sound_options">
 		<item>关闭</item>
 		<item>开启（11 KHz）</item>

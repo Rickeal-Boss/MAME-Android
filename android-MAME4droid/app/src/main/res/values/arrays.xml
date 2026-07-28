@@ -87,6 +87,17 @@
 		<item>5</item>
 	</string-array>
 
+	<string-array name="pref_tv_dpad_mode_entries">
+		<item>Auto</item>
+		<item>Mouse-pointer simulation</item>
+		<item>Direct key navigation</item>
+	</string-array>
+	<string-array name="pref_tv_dpad_mode_values">
+		<item>0</item>
+		<item>1</item>
+		<item>2</item>
+	</string-array>
+
 	<string-array name="pref_frameskip_options">
 		<item>Auto</item>
 		<item>None</item>

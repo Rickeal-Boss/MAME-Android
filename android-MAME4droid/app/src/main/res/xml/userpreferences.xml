@@ -192,6 +192,14 @@
 			android:summary="@string/pref_hide_on_pad_summary"
 			android:defaultValue="True"/>
 
+		<ListPreference
+			android:key="PREF_TV_DPAD_MODE"
+			android:title="@string/pref_tv_dpad_mode_title"
+			android:summary="@string/pref_tv_dpad_mode_summary"
+			android:entries="@array/pref_tv_dpad_mode_entries"
+			android:entryValues="@array/pref_tv_dpad_mode_values"
+			android:defaultValue="0" />
+
 		<PreferenceScreen android:key="defineKeys"
 			android:title="@string/pref_map_buttons_title"
 			android:summary="@string/pref_map_buttons_summary" />

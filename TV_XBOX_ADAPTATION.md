@@ -59,7 +59,39 @@
 ### 2.6 资源与设置 UI
 - `res/xml/userpreferences.xml`：在外接手柄设置页新增开关 `Auto-hide controls on gamepad`。
 - `res/values/strings.xml` 与 `res/values-zh/strings.xml`：新增 `xbox_connected`、`gamepad_connected`、`pref_hide_on_pad_title`、`pref_hide_on_pad_summary`。
+- `input/GameController.java`：在 `handleGameController()` 开头拦截 TV 遥控方向键，新增 `isTvRemoteDpad()` / `handleTvDpad()` 双模式分发；`input/InputHandler.java`：`isHideTouchController()` 在 Android TV 上始终隐藏屏幕触摸控制。
+- `helpers/PrefsHelper.java` 与 `helpers/MainHelper.java`：新增 `PREF_TV_DPAD_MODE`（默认 Auto）并在 TV 设备检测时初始化。
+- `res/xml/userpreferences.xml` 与 `res/values*/strings.xml`、`res/values*/arrays.xml`：新增「TV remote D-pad mode」设置项（en + zh 文案与列表项）。
 - `16:9` 渲染本身由 `MainHelper.measureWindow()` 的等比缩放（letterbox/pillarbox）保证，本补丁通过 overscan 默认开启进一步确保画面不被裁切。
+
+---
+
+## 2.5 遥控器方向键双模式（TV Remote D-pad Dual Mode）
+
+### 背景与根因
+Android TV 遥控器的方向键事件来源是 `SOURCE_DPAD` / `SOURCE_KEYBOARD`，**不是** 手柄路径所期望的
+`SOURCE_GAMEPAD` / `SOURCE_JOYSTICK`。原 `GameController.handleGameController()` 以
+`isGamepad || isJoystick` 作为路由前置条件，因此遥控方向键会落入 “Dynamic Bridge” 分支且无映射，
+最终 `return false` 被丢弃——在 MAME 自渲染的 OSD 前端里无法导航。
+
+### 实现
+在 `handleGameController()` 最开头拦截 TV 遥控方向键，按设置项 `PREF_TV_DPAD_MODE` 分发：
+
+| 模式 | 行为 |
+|------|------|
+| **自动（默认）** | 鼠标类游戏内 → 模拟鼠标指针；其余场景 → 直接按键导航（Android TV 习惯） |
+| **模拟鼠标指针** | 方向键驱动模拟鼠标光标（相对像素步进 + 按住连续移动），OK = 鼠标左键点击 |
+| **直接按键导航** | 方向键写入 P1 数字量（与手柄摇杆一致）以导航 MAME OSD；OK 在前端=确认/启动（Enter/UI_SELECT），游戏中=打开 MAME4droid 选项菜单；返回键沿用系统返回 |
+
+判定函数 `isTvRemoteDpad()` 仅对 **Android TV（UiModeManager TELEVISION）或显式 DPAD 来源** 的方向键生效，
+且排除真实手柄（`SOURCE_GAMEPAD` / `SOURCE_CLASS_JOYSTICK`），因此手机/平板上的物理键盘绝不受影响。
+
+### 相关修复
+- **纯遥控器电视**：`isHideTouchController()` 现已在 `isAndroidTV()` 时始终隐藏屏幕触摸控制（电视无触屏，虚拟按键无意义）。
+- **OK 键语义修正**：直接模式下，前端 OK=确认/启动游戏（Enter/UI_SELECT），解决了原先“纯遥控器无法启动游戏、只能开菜单”的问题；游戏中 OK=打开选项菜单。
+
+### 设置入口
+`Settings → Game controller → TV remote D-pad mode`（ListPreference，en + zh 文案，选项：Auto / Mouse-pointer simulation / Direct key navigation）。
 
 ---
 
@@ -90,6 +122,11 @@
 - [ ] 在 Android TV（或 TV 模拟器，UI 模式设为 Television）上安装，主页出现应用图标。
 - [ ] 首次启动自动设置：横屏、隐藏触摸控制、overscan 安全边距。
 - [ ] 进入 MAME 游戏列表后用**遥控器方向键 / 手柄方向键**可滚动选择，A/START 进入。
+- [ ] `Settings → Game controller → TV remote D-pad mode` 可选 Auto / Mouse-pointer simulation / Direct key navigation。
+- [ ] 默认 Auto：前端方向键滚动选择、**OK 启动游戏**；游戏中 OK 打开选项菜单（符合 Android TV“OK=选择”规范）。
+- [ ] 选 Mouse-pointer simulation：方向键移动模拟鼠标光标、OK=点击（用于鼠标/光枪类游戏）。
+- [ ] 选 Direct key navigation：方向键导航 MAME OSD 的行为与手柄摇杆一致。
+- [ ] 仅有遥控器（无手柄）的电视上，屏幕触摸控制已被隐藏，16:9 画面保持整洁。
 - [ ] **插入 Xbox 手柄** → 屏幕右下出现 “Xbox 手柄已连接，已自动隐藏屏幕虚拟按键”，虚拟按键消失。
 - [ ] **拔出 Xbox 手柄** → 虚拟按键自动恢复（若 `Landscape touch controller` 开启）。
 - [ ] 在设置中关闭 `Auto-hide controls on gamepad` 后，连接手柄不再自动隐藏（尊重用户选择）。

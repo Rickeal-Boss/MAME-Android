@@ -268,6 +268,8 @@
 
     <string name="pref_hide_on_pad_title">连接手柄时自动隐藏虚拟按键</string>
     <string name="pref_hide_on_pad_summary">连接手柄（例如 Xbox）时自动隐藏屏幕触摸控制；在 Android TV 上可保持 16:9 画面整洁。</string>
+        <string name="pref_tv_dpad_mode_title">电视遥控器方向键模式</string>
+    <string name="pref_tv_dpad_mode_summary">电视遥控器方向键的行为方式。自动：在鼠标类游戏中模拟鼠标指针，其余场景使用直接导航；模拟鼠标指针：驱动模拟鼠标光标；直接导航：像手柄摇杆一样导航 MAME 菜单。</string>
     <string name="prefscr_mouse_title">鼠标</string>
     <string name="prefscr_mouse_summary">选择以打开鼠标选项。\n（触摸鼠标时，第二根手指为主射击。第二根手指按下时，第三根手指为副射击）</string>
     <string name="pref_mouse_title">物理鼠标</string>

@@ -46,6 +46,8 @@ package com.seleuco.mame4droid.input;
 
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.SparseIntArray;
 import android.view.InputDevice;
 import android.view.KeyEvent;
@@ -620,6 +622,17 @@ public class GameController implements IController {
 	public boolean handleGameController(int keyCode, KeyEvent event, int[] digital_data) {
 		InputDevice device = event.getDevice();
 
+		// --- ANDROID TV REMOTE DIRECTION PAD (dual mode) ---
+		// TV remote D-pad events arrive with SOURCE_DPAD / SOURCE_KEYBOARD, NOT the
+		// GAMEPAD / JOYSTICK source the main gamepad path expects. Intercept them
+		// here (before the gamepad routing) and dispatch per the selected mode:
+		//   Auto            -> mouse-pointer simulation in mouse games, else direct keys
+		//   Mouse pointer   -> D-pad drives the emulated mouse cursor
+		//   Direct keys     -> D-pad navigates the MAME OSD like a gamepad stick
+		if (isTvRemoteDpad(keyCode, event)) {
+			return handleTvDpad(keyCode, event, digital_data);
+		}
+
 		// Maintain visual joystick logic (Protected against null devices)
 		int sources = (device != null) ? device.getSources() : 0;
 		boolean isGamepad = (sources & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD;
@@ -755,8 +768,173 @@ public class GameController implements IController {
 
 
 	// =========================================================================
-	// ANALOG & STICK PROCESSING
+	// ANDROID TV REMOTE DIRECTION PAD (dual-mode)
 	// =========================================================================
+
+	// TV remote D-pad behaviour modes (mirrors PrefsHelper.PREF_TV_DPAD_MODE).
+	private static final int TV_DPAD_MODE_AUTO = 0;
+	private static final int TV_DPAD_MODE_MOUSE = 1;
+	private static final int TV_DPAD_MODE_DIRECT = 2;
+
+	// Relative pointer step (pixels) applied per repeat tick while a direction is held.
+	private static final int TV_MOUSE_STEP = 30;
+	private static final long TV_MOUSE_REPEAT_MS = 50;
+
+	// Accumulated pointer delta for the currently held directions (mouse mode).
+	private int tvMouseDx = 0;
+	private int tvMouseDy = 0;
+	private boolean tvMouseScheduled = false;
+	private final Handler tvMouseHandler = new Handler(Looper.getMainLooper());
+	private final Runnable tvMouseTick = new Runnable() {
+		@Override
+		public void run() {
+			if (tvMouseDx != 0 || tvMouseDy != 0) {
+				Emulator.setMouseData(0, Emulator.MOUSE_MOVE_POINTER, 0, tvMouseDx, tvMouseDy);
+				tvMouseHandler.postDelayed(this, TV_MOUSE_REPEAT_MS);
+			} else {
+				tvMouseScheduled = false;
+			}
+		}
+	};
+
+	/**
+	 * True for direction-pad keys coming from a TV remote (SOURCE_DPAD / SOURCE_KEYBOARD)
+	 * rather than from a real gamepad. Gated on Android TV or an explicit DPAD source so
+	 * phones with a physical keyboard are never affected.
+	 */
+	private boolean isTvRemoteDpad(int keyCode, KeyEvent event) {
+		switch (keyCode) {
+			case KeyEvent.KEYCODE_DPAD_UP:
+			case KeyEvent.KEYCODE_DPAD_DOWN:
+			case KeyEvent.KEYCODE_DPAD_LEFT:
+			case KeyEvent.KEYCODE_DPAD_RIGHT:
+			case KeyEvent.KEYCODE_DPAD_CENTER:
+				break;
+			default:
+				return false;
+		}
+		int src = event.getSource();
+		boolean isGamepad = (src & (InputDevice.SOURCE_GAMEPAD | InputDevice.SOURCE_CLASS_JOYSTICK)) != 0;
+		if (isGamepad) return false; // owned by the main gamepad routing path
+		boolean dpadSource = (src & InputDevice.SOURCE_DPAD) == InputDevice.SOURCE_DPAD;
+		boolean kbSource = (src & InputDevice.SOURCE_KEYBOARD) == InputDevice.SOURCE_KEYBOARD;
+		boolean tv = mm.getMainHelper().isAndroidTV();
+		return dpadSource || (tv && kbSource);
+	}
+
+	/**
+	 * Resolves the effective mode, expanding Auto into Mouse or Direct depending on
+	 * whether a mouse-driven game is currently running.
+	 */
+	private int resolveTvDpadMode() {
+		int mode = mm.getPrefsHelper().getTvDpadMode();
+		if (mode == TV_DPAD_MODE_AUTO) {
+			boolean mouseOn = mm.getPrefsHelper().isMouseEnabled()
+				|| mm.getPrefsHelper().isTouchMouseEnabled();
+			if (Emulator.isInGame() && mouseOn) {
+				return TV_DPAD_MODE_MOUSE;
+			}
+			return TV_DPAD_MODE_DIRECT;
+		}
+		return mode;
+	}
+
+	/**
+	 * Dispatches a TV remote D-pad key according to the selected dual mode.
+	 * Returns true when the event was consumed.
+	 */
+	private boolean handleTvDpad(int keyCode, KeyEvent event, int[] digital_data) {
+		int action = event.getAction();
+		int mode = resolveTvDpadMode();
+
+		switch (keyCode) {
+			case KeyEvent.KEYCODE_DPAD_CENTER:
+				if (mode == TV_DPAD_MODE_MOUSE) {
+					// Mouse-mode OK: click the emulated mouse button.
+					if (action == KeyEvent.ACTION_DOWN)
+						Emulator.setMouseData(0, Emulator.MOUSE_BTN_DOWN, 1, -1, -1);
+					else
+						Emulator.setMouseData(0, Emulator.MOUSE_BTN_UP, 1, -1, -1);
+					return true;
+				}
+				// Direct-mode OK (Android TV "select" convention):
+				//  - Frontend / OSD menus: confirm selection (Enter -> MAME UI_SELECT)
+				//  - In game: open the MAME4droid options menu
+				if (Emulator.isInGame()) {
+					handleControllerKey(OPTION_VALUE, event, digital_data);
+				} else {
+					Emulator.setKeyData(KeyEvent.KEYCODE_ENTER,
+						action == KeyEvent.ACTION_DOWN ? Emulator.KEY_DOWN : Emulator.KEY_UP,
+						(char) 0);
+				}
+				return true;
+
+			case KeyEvent.KEYCODE_DPAD_UP:
+			case KeyEvent.KEYCODE_DPAD_DOWN:
+			case KeyEvent.KEYCODE_DPAD_LEFT:
+			case KeyEvent.KEYCODE_DPAD_RIGHT:
+				if (mode == TV_DPAD_MODE_MOUSE) {
+					return handleTvDpadMouse(keyCode, action);
+				}
+				return handleTvDpadDirect(keyCode, action, digital_data);
+
+			default:
+				return false;
+		}
+	}
+
+	/**
+	 * Direct-key mode: feed the D-pad into player-1 digital data exactly like a
+	 * gamepad stick, so the MAME OSD frontend navigates with MAME's default UI input.
+	 */
+	private boolean handleTvDpadDirect(int keyCode, int action, int[] digital_data) {
+		int mask = 0;
+		switch (keyCode) {
+			case KeyEvent.KEYCODE_DPAD_UP:    mask = IController.UP_VALUE;    break;
+			case KeyEvent.KEYCODE_DPAD_DOWN:  mask = IController.DOWN_VALUE;  break;
+			case KeyEvent.KEYCODE_DPAD_LEFT:  mask = IController.LEFT_VALUE;  break;
+			case KeyEvent.KEYCODE_DPAD_RIGHT: mask = IController.RIGHT_VALUE; break;
+		}
+		if (mask == 0) return false;
+		if (action == KeyEvent.ACTION_DOWN) digital_data[0] |= mask;
+		else digital_data[0] &= ~mask;
+		Emulator.setDigitalData(0, digital_data[0]);
+		return true;
+	}
+
+	/**
+	 * Mouse-pointer mode: drive the emulated mouse cursor. An immediate step is sent
+	 * on key-down for responsiveness, and a repeat tick keeps moving while the key is
+	 * held so the cursor glides smoothly across the screen.
+	 */
+	private boolean handleTvDpadMouse(int keyCode, int action) {
+		int dx = 0, dy = 0;
+		switch (keyCode) {
+			case KeyEvent.KEYCODE_DPAD_UP:    dy = -TV_MOUSE_STEP; break;
+			case KeyEvent.KEYCODE_DPAD_DOWN:  dy =  TV_MOUSE_STEP; break;
+			case KeyEvent.KEYCODE_DPAD_LEFT:  dx = -TV_MOUSE_STEP; break;
+			case KeyEvent.KEYCODE_DPAD_RIGHT: dx =  TV_MOUSE_STEP; break;
+		}
+		if (action == KeyEvent.ACTION_DOWN) {
+			tvMouseDx += dx;
+			tvMouseDy += dy;
+			Emulator.setMouseData(0, Emulator.MOUSE_MOVE_POINTER, 0, dx, dy);
+			if (!tvMouseScheduled) {
+				tvMouseScheduled = true;
+				tvMouseHandler.postDelayed(tvMouseTick, TV_MOUSE_REPEAT_MS);
+			}
+		} else {
+			tvMouseDx -= dx;
+			tvMouseDy -= dy;
+			if (tvMouseDx == 0 && tvMouseDy == 0) {
+				tvMouseScheduled = false;
+				tvMouseHandler.removeCallbacks(tvMouseTick);
+			}
+		}
+		return true;
+	}
+
+
 
 	final public float rad2degree(float r) {
 		return ((r * 180.0f) / MY_PI);

@@ -306,6 +306,8 @@ public class InputHandler implements OnTouchListener, OnKeyListener {
 			gameController.isEnabled() ||
 			// Xbox / any gamepad connected: auto-hide the on-screen controls
 			(mm.getPrefsHelper().isHideOnPad() && GameController.isGamepadConnected()) ||
+			// Android TV: a TV is a no-touch device, so the on-screen controls are useless
+			mm.getMainHelper().isAndroidTV() ||
 			(mouse.isEnabled() && Emulator.isInGameButNotInMenu());
 	}
 

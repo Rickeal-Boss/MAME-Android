@@ -179,6 +179,9 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	final static public String PREF_GLOBAL_NAVBAR_MODE = "PREF_GLOBAL_NAVBAR_MODE";
 	final static public String PREF_GLOBAL_SCALE_BEYOND = "PREF_GLOBAL_SCALE_BEYOND";
 	final static public String PREF_GLOBAL_OVERSCAN = "PREF_GLOBAL_OVERSCAN";
+	// TV remote direction-pad behaviour. Values: 0 = Auto, 1 = mouse-pointer
+	// simulation, 2 = direct key navigation. Driven by GameController.handleTvDpad().
+	final static public String PREF_TV_DPAD_MODE = "PREF_TV_DPAD_MODE";
 	final static public String PREF_GLOBAL_USE_NOTCH = "PREF_GLOBAL_USE_NOTCH";
 	final static public String PREF_GLOBAL_SIMPLE_UI = "PREF_GLOBAL_SIMPLE_UI";
 	final static public String PREF_OVERLAY = "PREF_OVERLAY";
@@ -438,6 +441,21 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	 */
 	public boolean isHideOnPad() {
 		return getSharedPreferences().getBoolean(PREF_HIDE_ON_PAD, true);
+	}
+
+	/**
+	 * TV remote direction-pad behaviour (dual mode).
+	 * 0 = Auto (mouse-pointer simulation while in a mouse-enabled game, otherwise
+	 * direct key navigation — the Android TV convention);
+	 * 1 = Mouse-pointer simulation (D-pad drives the emulated mouse cursor);
+	 * 2 = Direct key navigation (D-pad navigates the MAME OSD like a gamepad stick).
+	 */
+	public int getTvDpadMode() {
+		try {
+			return Integer.valueOf(getSharedPreferences().getString(PREF_TV_DPAD_MODE, "0")).intValue();
+		} catch (Exception e) {
+			return 0;
+		}
 	}
 
 	public boolean isAlwaysGH() {

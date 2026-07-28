@@ -285,6 +285,8 @@
     <string name="pref_hide_touch_ingame_summary">Hide the on-screen buttons during gameplay when a controller is connected (fullscreen only).</string>
     <string name="pref_hide_on_pad_title">Auto-hide controls on gamepad</string>
     <string name="pref_hide_on_pad_summary">Automatically hide the on-screen touch controls whenever a gamepad (e.g. Xbox) is connected. On Android TV this keeps the 16:9 screen clean.</string>
+    <string name="pref_tv_dpad_mode_title">TV remote D-pad mode</string>
+    <string name="pref_tv_dpad_mode_summary">How the TV remote direction pad behaves. Auto uses mouse-pointer simulation inside mouse games and direct navigation elsewhere; Mouse-pointer drives the emulated cursor; Direct navigates the MAME menu like a gamepad.</string>
 
     <string name="prefscr_mouse_title">Mouse</string>
     <string name="prefscr_mouse_summary">Select it to open mouse options.\n(On touch mouse, second finger will be main fire. Third finger when second finger is pressed will be alternate fire)</string>
