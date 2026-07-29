@@ -52,6 +52,12 @@ Code-review-driven fixes (see `CODE_REVIEW_MAME_Android_part2.docx`). Grouped by
 - `PrefsHelper.java` — 2.10 HIGHT typo + 2.7 `safeInt()` hardening
 - `NetPlayHelper.java` — 3.x null-guard public addr
 
+### Build fix (post-push)
+- `MainHelper.copyFiles()` — `zip_dir` was inadvertently declared inside the
+  try-with-resources scope during the 2.9 refactor, leaving its post-loop uses
+  (ui.ini restore, `cannot find symbol`) out of scope. Moved the declaration
+  ahead of the `try (ZipInputStream …)` so it stays visible after the stream closes.
+
 ## v1.0.0-tv-xbox (2026-07-28)
 
 Android TV (16:9) & Xbox One controller adaptation of MAME4droid-current.

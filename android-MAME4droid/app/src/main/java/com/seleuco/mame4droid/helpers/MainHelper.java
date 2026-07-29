@@ -330,10 +330,10 @@ public class MainHelper {
             // zis (and its underlying fis) and each per-entry BufferedOutputStream even
             // if an exception is thrown mid-extraction (previously leaked on error paths).
             InputStream fis = mm.getResources().openRawResource(R.raw.files);
+            String zip_dir = new File(roms_dir).getCanonicalPath();
             try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(fis))) {
             // Loop over all of the entries in the zip file
 
-            String zip_dir = new File(roms_dir).getCanonicalPath();
             int count;
             byte data[] = new byte[BUFFER_SIZE];
             ZipEntry entry;
