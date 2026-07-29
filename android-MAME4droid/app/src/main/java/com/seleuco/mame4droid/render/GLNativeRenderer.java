@@ -286,8 +286,12 @@ public final class GLNativeRenderer implements Renderer, IGLRenderer {
 
 		for (int i = 0; i < RENDER_KEYS_INT.length; i++) {
 			String key = RENDER_KEYS_INT[i];
-			if (key.equals("PREF_BLOOM_BASE_NITS") ||
-				key.equals("PREF_BLOOM_MAX_NITS") ||
+			// The HDR nits keys are PREF_VECTOR_EFFECT_BASE_NITS / _MAX_NITS
+			// (not PREF_BLOOM_*, which do not exist in RENDER_KEYS_INT). Using the
+			// wrong names meant these lines never matched and HDR defaults were
+			// never restored.
+			if (key.equals("PREF_VECTOR_EFFECT_BASE_NITS") ||
+				key.equals("PREF_VECTOR_EFFECT_MAX_NITS") ||
 				key.startsWith("PREF_HDR_")) {
 				editor.putInt(key, DEF_INT_VALUES[i]);
 			}

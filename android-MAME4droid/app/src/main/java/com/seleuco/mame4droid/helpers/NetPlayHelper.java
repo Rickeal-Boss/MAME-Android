@@ -1154,7 +1154,8 @@ public class NetPlayHelper {
                      * global is public (no NAT, plays over the internet); a ULA
                      * plays on the same LAN only.  Show each with the right
                      * label instead of a bare "unavailable". */
-                    boolean pubEmpty = Emulator.netplayGetPublicAddr().length() == 0;
+                    String pubAddr = Emulator.netplayGetPublicAddr();
+                    boolean pubEmpty = pubAddr == null || pubAddr.length() == 0;
                     java.util.List<String> v6glob = new java.util.ArrayList<String>();
                     java.util.List<String> v6lan = new java.util.ArrayList<String>();
                     if (pubEmpty && ipProto != 0)

@@ -272,8 +272,17 @@ public class DialogHelper {
 
 				boolean notKeyboard = !mm.getPrefsHelper().isVirtualKeyboardEnabled() || mm.getInputHandler().getKeyboard().isKeyboardConnected() || mm.getMainHelper().isAndroidTV();
 
-				if(notKeyboard)
-					items = Arrays.copyOf(items, items.length-1);
+				if (notKeyboard) {
+					// Filter by content, not by position: the keyboard entry is only
+					// assumed to be last because of the current item ordering. If the
+					// list is ever reordered, copyOf(..., length-1) would silently drop
+					// the wrong entry. Matching on sKeyboard keeps the right one removed.
+					java.util.List<CharSequence> kept = new java.util.ArrayList<>();
+					for (CharSequence it : items) {
+						if (!sKeyboard.equals(it)) kept.add(it);
+					}
+					items = kept.toArray(new CharSequence[0]);
+				}
 
 				builder.setCancelable(true);
 				builder.setItems(items, new DialogInterface.OnClickListener() {

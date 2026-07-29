@@ -117,7 +117,10 @@ public class MainHelper {
     final public static int DEVICE_GENERIC = 1;
     final public static int DEVICE_SHIELD = 3;
     final public static int DEVICE_AGAMEPAD2 = 5;
-    final public static int DEVICE_ANDROIDTV = 5;
+    // NOTE: DEVICE_ANDROIDTV must stay unique. It previously reused value 5, which is
+    // also DEVICE_AGAMEPAD2, so on Android TV any device whose name contains "joy_key"
+    // wrongly took the AGAMEPAD2 mapping branch (see GameController.detectDevice).
+    final public static int DEVICE_ANDROIDTV = 7;
 	final public static int DEVICE_METAQUEST = 6;
 
     final public static int INSTALLATION_DIR_UNDEFINED = 1;
@@ -323,10 +326,11 @@ public class MainHelper {
 			pw = new WarnWidget(mm, mm.getString(R.string.installing_title), mm.getString(R.string.installing_wait), Color.WHITE,false,true);
 			pw.init();
 
-            // Create a ZipInputStream to read the zip file
-            BufferedOutputStream dest = null;
+            // Create a ZipInputStream to read the zip file. try-with-resources closes
+            // zis (and its underlying fis) and each per-entry BufferedOutputStream even
+            // if an exception is thrown mid-extraction (previously leaked on error paths).
             InputStream fis = mm.getResources().openRawResource(R.raw.files);
-            ZipInputStream zis = new ZipInputStream(new BufferedInputStream(fis));
+            try (ZipInputStream zis = new ZipInputStream(new BufferedInputStream(fis))) {
             // Loop over all of the entries in the zip file
 
             String zip_dir = new File(roms_dir).getCanonicalPath();
@@ -344,16 +348,13 @@ public class MainHelper {
 
 					pw.notifyText(mm.getString(R.string.installing_file, f.getName()));
 
-                    String destination = zip_dir;
-                    String destFN = destination + File.separator + entry.getName();
-                    // Write the file to the file system
-                    FileOutputStream fos = new FileOutputStream(destFN);
-                    dest = new BufferedOutputStream(fos, BUFFER_SIZE);
-                    while ((count = zis.read(data, 0, BUFFER_SIZE)) != -1) {
-                        dest.write(data, 0, count);
+                    String destFN = zip_dir + File.separator + entry.getName();
+                    // Write the file to the file system (closed automatically by try-with-resources)
+                    try (BufferedOutputStream dest = new BufferedOutputStream(new FileOutputStream(destFN), BUFFER_SIZE)) {
+                        while ((count = zis.read(data, 0, BUFFER_SIZE)) != -1) {
+                            dest.write(data, 0, count);
+                        }
                     }
-                    dest.flush();
-                    dest.close();
                 } else {
                     File f = new File(zip_dir+ File.separator
                             + entry.getName());
@@ -361,7 +362,7 @@ public class MainHelper {
                 }
 
             }
-            zis.close();
+            } // try-with-resources closes zis/fis
 
 			File f1 = new File(zip_dir, "ui.ini");
 			if(!f1.exists())
@@ -375,7 +376,7 @@ public class MainHelper {
 
             String dir = this.getInstallationDIR();
             if (!dir.endsWith("/")) dir += "/";
-            String rompath = mm.getPrefsHelper().getROMsDIR() != null && mm.getPrefsHelper().getROMsDIR() != "" ? mm
+            String rompath = mm.getPrefsHelper().getROMsDIR() != null && !mm.getPrefsHelper().getROMsDIR().isEmpty() ? mm
                     .getPrefsHelper().getROMsDIR() : dir + "roms";
             String msg = mm.getString(R.string.created_updated_msg,
                     dir, rompath, mm.getString(R.string.mame_version));
@@ -388,17 +389,15 @@ public class MainHelper {
                 //msg += "\n\nTIP: You can enable a setting to store save states under roms folder, so they will not be deleted when uninstalling MAME4droid. Look at MAME4droid option in settings.";
             mm.getDialogHelper().setInfoMsg(msg);
 
-			mm.runOnUiThread(new Runnable() {
-				public void run() {
-					try {
-						Thread.sleep(1000);
-					} catch (InterruptedException e) {
-
-					}
-					mm.showDialog(DialogHelper.DIALOG_INFO);
-				}
-			});
-            //mm.showDialog(DialogHelper.DIALOG_INFO);
+		// Defer the info dialog by ~1s WITHOUT blocking the UI thread (a 1s sleep on
+		// the UI thread during first-run file copy is an ANR risk). Post on the main looper.
+		final MAME4droid activity = mm;
+		new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+			public void run() {
+				if (activity != null) activity.showDialog(DialogHelper.DIALOG_INFO);
+			}
+		}, 1000);
+        //mm.showDialog(DialogHelper.DIALOG_INFO);
 
         } catch (Exception e) {
             e.printStackTrace();
@@ -442,8 +441,6 @@ public class MainHelper {
 
     public void reload() {
 
-        if (true)
-            return;
         System.out.println("RELOAD!!!!!");
 
         Intent intent = mm.getIntent();
@@ -608,8 +605,13 @@ public class MainHelper {
 
         String definedKeys = prefsHelper.getDefinedKeys();
         final String[] keys = definedKeys.split(":");
-        for (int i = 0; i < keys.length; i++)
-            GameController.keyMapping[i] = Integer.valueOf(keys[i]).intValue();
+        for (int i = 0; i < keys.length; i++) {
+            try {
+                GameController.keyMapping[i] = Integer.valueOf(keys[i]).intValue();
+            } catch (NumberFormatException e) {
+                Log.w("MainHelper", "Skipping malformed key mapping entry: " + keys[i]);
+            }
+        }
 
         Emulator.setDebug(prefsHelper.isDebugEnabled());
 
@@ -1128,7 +1130,7 @@ galaxy sde	   --> 2560x1600 16:10
             String name = f.getName();
             String romName = Emulator.getValueStr(Emulator.ROM_NAME);
             // System.out.print("Intent view: "+name + " "+ romName);
-            if (/*romName != null && */name.equals(romName))
+            if (romName != null && name.equals(romName))
                 return;
             mm.setIntent(intent);
             new Thread(new Runnable() {
@@ -1177,7 +1179,7 @@ galaxy sde	   --> 2560x1600 16:10
             try {
                 if (cursor != null && cursor.moveToFirst()) {
                     int i = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
-                    result = cursor.getString(i);
+                    if (i >= 0) result = cursor.getString(i); // getColumnIndex may return -1
                 }
             } finally {
                 if (cursor != null)

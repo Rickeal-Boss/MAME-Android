@@ -45,7 +45,10 @@ public class WarnWidget {
 	protected TextView textView = null;
 	protected LinearLayout parent = null;
 	protected boolean init = false;
-	protected boolean added = false;
+	// volatile: written on the UI thread (init) and read from a background thread
+	// (end() busy-wait). Without volatile the background thread can cache a stale
+	// value and spin forever.
+	protected volatile boolean added = false;
 	protected boolean lockOrientation = true;
 	protected boolean bottom = false;
 

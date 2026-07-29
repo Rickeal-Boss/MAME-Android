@@ -399,6 +399,10 @@ public class MAME4droid extends Activity {
 		super.onDestroy();
 		Log.d("EMULATOR", "onDestroy " + this);
 
+		// Release the static Activity reference held by Emulator so the old Activity
+		// instance can be garbage-collected (otherwise it leaks via Emulator.mm).
+		Emulator.setMAME4droid(null);
+
 		View frame = this.findViewById(R.id.EmulatorFrame);
 		if (frame != null)
 			frame.setOnTouchListener(null);

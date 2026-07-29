@@ -130,8 +130,12 @@ public class GameController implements IController {
 
 	// --- Android TV / gamepad connectivity tracking (used for auto-hiding
 	// the on-screen touch controls when a physical controller is present) ---
-	protected static boolean gamepadConnected = false;
-	protected static boolean xboxConnected = false;
+	// volatile: written from the InputManager listener / detectDevice threads and
+	// read from the UI thread (e.g. InputHandler.isHideTouchController). Without
+	// volatile the UI thread can cache a stale value and fail to hide/show the
+	// touch controls promptly on connect/disconnect.
+	protected static volatile boolean gamepadConnected = false;
+	protected static volatile boolean xboxConnected = false;
 
 	protected int[][] deviceMappings = new int[MAX_KEYS][MAX_DEVICES];
 	protected static SparseIntArray banDev = new SparseIntArray(50);
@@ -352,9 +356,14 @@ public class GameController implements IController {
 		// Fallback for badly implemented gamepads without descriptors
 		int iControllerNumber = idev.getControllerNumber();
 		Log.d(TAG, "-> Using volatile Android fallback. iControllerNumber: " + iControllerNumber);
-		if (iControllerNumber > 0) return iControllerNumber;
+		if (iControllerNumber > 0) return iControllerNumber & 0xFFFF;
 
-		return idev.getId();
+		// NOTE: the virtual ID is packed into the upper 16 bits of a keycode int
+		// (see makeKeyCodeWithDeviceID), so it MUST stay within 0..0xFFFF. Some
+		// devices report an Android input-device id far larger than 65535; masking
+		// here keeps the packed value consistent with getDeviceIdFromKeyCodeWithDeviceID
+		// (which reads the upper 16 bits) and prevents silent routing to the wrong player.
+		return idev.getId() & 0xFFFF;
 	}
 
 	/**
@@ -451,9 +460,11 @@ public class GameController implements IController {
 	}
 
 	public static int makeKeyCodeWithDeviceID(int iDeviceId, int iKeyCode) {
-		int iRet = iDeviceId;
+		// The device id occupies the upper 16 bits; mask it so a caller that passes
+		// an id wider than 16 bits cannot shift bits past the int and corrupt the pack.
+		int iRet = (iDeviceId & 0xFFFF);
 		iRet = iRet << 16;
-		iRet |= iKeyCode;
+		iRet |= (iKeyCode & 0xFFFF);
 		return iRet;
 	}
 
@@ -790,9 +801,12 @@ public class GameController implements IController {
 	private static final long TV_MOUSE_REPEAT_MS = 50;
 
 	// Accumulated pointer delta for the currently held directions (mouse mode).
+	// tvDown tracks the *set* of physically held direction keys; tvMouseDx/Dy are
+	// recomputed from that set, never incremented, so OS key-repeat cannot desync them.
 	private int tvMouseDx = 0;
 	private int tvMouseDy = 0;
 	private boolean tvMouseScheduled = false;
+	private final java.util.Set<Integer> tvDown = new java.util.HashSet<>();
 	private final Handler tvMouseHandler = new Handler(Looper.getMainLooper());
 	private final Runnable tvMouseTick = new Runnable() {
 		@Override
@@ -913,9 +927,28 @@ public class GameController implements IController {
 
 	/**
 	 * Mouse-pointer mode: drive the emulated mouse cursor. An immediate step is sent
-	 * on key-down for responsiveness, and a repeat tick keeps moving while the key is
-	 * held so the cursor glides smoothly across the screen.
+	 * on the first key-down for responsiveness, and a repeat tick keeps moving while
+	 * the key is held so the cursor glides smoothly across the screen.
+	 *
+	 * Held directions are tracked in a {@code Set} (tvDown) rather than by accumulating
+	 * deltas. Android delivers repeated ACTION_DOWN events while a key is held
+	 * (getRepeatCount() increments); an incremental += would desync the accumulated delta
+	 * from the real held keys, so on release tvMouseDx/Dy could never return to 0 and the
+	 * tick would drift forever. Recomputing from the held-set on every press/release keeps
+	 * the delta exactly in sync with the physical buttons.
 	 */
+	private void recomputeTvMouse() {
+		int dx = 0, dy = 0;
+		for (int k : tvDown) {
+			if (k == KeyEvent.KEYCODE_DPAD_UP)        dy -= TV_MOUSE_STEP;
+			else if (k == KeyEvent.KEYCODE_DPAD_DOWN)  dy += TV_MOUSE_STEP;
+			else if (k == KeyEvent.KEYCODE_DPAD_LEFT)  dx -= TV_MOUSE_STEP;
+			else if (k == KeyEvent.KEYCODE_DPAD_RIGHT) dx += TV_MOUSE_STEP;
+		}
+		tvMouseDx = dx;
+		tvMouseDy = dy;
+	}
+
 	private boolean handleTvDpadMouse(int keyCode, int action) {
 		int dx = 0, dy = 0;
 		switch (keyCode) {
@@ -923,21 +956,26 @@ public class GameController implements IController {
 			case KeyEvent.KEYCODE_DPAD_DOWN:  dy =  TV_MOUSE_STEP; break;
 			case KeyEvent.KEYCODE_DPAD_LEFT:  dx = -TV_MOUSE_STEP; break;
 			case KeyEvent.KEYCODE_DPAD_RIGHT: dx =  TV_MOUSE_STEP; break;
+			default: return false;
 		}
 		if (action == KeyEvent.ACTION_DOWN) {
-			tvMouseDx += dx;
-			tvMouseDy += dy;
-			Emulator.setMouseData(0, Emulator.MOUSE_MOVE_POINTER, 0, dx, dy);
-			if (!tvMouseScheduled) {
-				tvMouseScheduled = true;
-				tvMouseHandler.postDelayed(tvMouseTick, TV_MOUSE_REPEAT_MS);
+			// Set.add() is idempotent: OS key-repeat DOWNs are ignored, so the held
+			// delta stays in sync with the physical buttons and never drifts.
+			if (tvDown.add(keyCode)) {
+				recomputeTvMouse();
+				Emulator.setMouseData(0, Emulator.MOUSE_MOVE_POINTER, 0, dx, dy);
+				if (!tvMouseScheduled) {
+					tvMouseScheduled = true;
+					tvMouseHandler.postDelayed(tvMouseTick, TV_MOUSE_REPEAT_MS);
+				}
 			}
-		} else {
-			tvMouseDx -= dx;
-			tvMouseDy -= dy;
-			if (tvMouseDx == 0 && tvMouseDy == 0) {
-				tvMouseScheduled = false;
-				tvMouseHandler.removeCallbacks(tvMouseTick);
+		} else { // ACTION_UP
+			if (tvDown.remove(keyCode)) {
+				recomputeTvMouse();
+				if (tvDown.isEmpty()) {
+					tvMouseScheduled = false;
+					tvMouseHandler.removeCallbacks(tvMouseTick);
+				}
 			}
 		}
 		return true;
@@ -1287,7 +1325,11 @@ public class GameController implements IController {
 
 			deviceMappings[KeyEvent.KEYCODE_BACK][id] = EXIT_VALUE;
 			desc = "XBox";
-			xboxConnected = true;
+			// Converge the connectivity flags to the single canonical writer
+			// (refreshGamepadConnected) instead of writing xboxConnected directly
+			// here. This keeps the flag correct on every entry path (add vs first
+			// key press) and avoids a second unsynchronized write site.
+			refreshGamepadConnected();
 			detected = true;
 
 		} else if (name.contains("Logitech") && name.contains("Dual Action")) {

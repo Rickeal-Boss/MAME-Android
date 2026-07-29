@@ -202,7 +202,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 
 	final static public int LOW = 1;
 	final static public int NORMAL = 2;
-	final static public int HIGHT = 2;
+	final static public int HIGHT = 3; // was 2 (typo, collided with NORMAL; should be HIGH)
 
 	final static public int PREF_DIGITAL_DPAD = 1;
 	final static public int PREF_DIGITAL_STICK = 2;
@@ -302,6 +302,23 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 		return PreferenceManager.getDefaultSharedPreferences(context);
 	}
 
+	/**
+	 * Parses an integer preference, never throwing on a corrupted/non-numeric value.
+	 * Falls back to the documented default string if the stored value is unparseable,
+	 * so a hand-edited or corrupt SharedPreferences entry cannot crash the app (review 2.7).
+	 */
+	private int safeInt(String key, String def) {
+		try {
+			return safeInt(key, def);
+		} catch (Exception e) {
+			try {
+				return Integer.parseInt(def);
+			} catch (Exception e2) {
+				return 0;
+			}
+		}
+	}
+
 	public boolean isBitmapFiltering() {
 		return getSharedPreferences().getBoolean(PREF_BITMAP_FILTERING, true);
 	}
@@ -330,11 +347,11 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getPortraitScaleMode() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_PORTRAIT_SCALING_MODE, "1")).intValue();
+		return safeInt(PREF_PORTRAIT_SCALING_MODE, "1");
 	}
 
 	public int getLandscapeScaleMode() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_LANDSCAPE_SCALING_MODE, "1")).intValue();
+		return safeInt(PREF_LANDSCAPE_SCALING_MODE, "1");
 	}
 
 	public String getOverlayFilterValue() {
@@ -342,7 +359,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getOrientationMode() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_ORIENTATION, "0")).intValue();
+		return safeInt(PREF_ORIENTATION, "0");
 	}
 
 	public boolean isPortraitTouchController() {
@@ -371,15 +388,15 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getVideoRenderMode() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_GLOBAL_VIDEO_RENDER_MODE, "1")).intValue();
+		return safeInt(PREF_GLOBAL_VIDEO_RENDER_MODE, "1");
 	}
 
 	public int getEmulatedResolution() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_EMU_RESOLUTION, "1")).intValue();
+		return safeInt(PREF_EMU_RESOLUTION, "1");
 	}
 
 	public int getOSDResolution() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_EMU_RESOLUTION_OSD, "9")).intValue();
+		return safeInt(PREF_EMU_RESOLUTION_OSD, "9");
 	}
 
 	public boolean isWarnOnExit() {
@@ -387,7 +404,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getSoundValue() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_EMU_SOUND, "44100")).intValue();
+		return safeInt(PREF_EMU_SOUND, "44100");
 	}
 
 	public boolean isFPSShowed() {
@@ -419,7 +436,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getNumProcessors() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_EMU_NUM_PROCESSORS, "-1")).intValue();
+		return safeInt(PREF_EMU_NUM_PROCESSORS, "-1");
 	}
 
 	public boolean isAutosave() {
@@ -452,7 +469,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	 */
 	public int getTvDpadMode() {
 		try {
-			return Integer.valueOf(getSharedPreferences().getString(PREF_TV_DPAD_MODE, "0")).intValue();
+			return safeInt(PREF_TV_DPAD_MODE, "0");
 		} catch (Exception e) {
 			return 0;
 		}
@@ -483,7 +500,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getControllerType() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_CONTROLLER_TYPE, "3")).intValue();
+		return safeInt(PREF_CONTROLLER_TYPE, "3");
 	}
 
 	public boolean isTouchLightgunForced() {
@@ -570,17 +587,17 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getStickWays() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_STICK_TYPE, "-1")).intValue();
+		return safeInt(PREF_STICK_TYPE, "-1");
 	}
 
 	public int getNumButtons() {
-		int n = Integer.valueOf(getSharedPreferences().getString(PREF_NUMBUTTONS, "-1")).intValue();
+		int n = safeInt(PREF_NUMBUTTONS, "-1");
 		if (n == 33) n = 3;
 		return n;
 	}
 
 	public boolean isBplusX() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_NUMBUTTONS, "-1")).intValue() == 33;
+		return safeInt(PREF_NUMBUTTONS, "-1") == 33;
 	}
 
 	public boolean isContollerAutodetect() {
@@ -588,11 +605,11 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getAnalogDZ() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_ANALOG_DZ, "2")).intValue();
+		return safeInt(PREF_ANALOG_DZ, "2");
 	}
 
 	public int getGamepadDZ() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_GAMEPAD_DZ, "3")).intValue();
+		return safeInt(PREF_GAMEPAD_DZ, "3");
 	}
 
 	public boolean isVibrate() {
@@ -600,7 +617,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getAnalogVibrateMode() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_ANALOG_VIBRATE_MODE, "1")).intValue();
+		return safeInt(PREF_ANALOG_VIBRATE_MODE, "1");
 	}
 
 	public String getROMsDIR() {
@@ -700,11 +717,11 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getTiltVerticalNeutralPos() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_TILT_NEUTRAL, "5")).intValue();
+		return safeInt(PREF_TILT_NEUTRAL, "5");
 	}
 
 	public int getTiltDZ() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_TILT_DZ, "3")).intValue();
+		return safeInt(PREF_TILT_DZ, "3");
 	}
 
 	public boolean isTiltAnalog() {
@@ -724,23 +741,23 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getButtonsAlpha() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_BUTTONS_ALPHA, "60")).intValue();
+		return safeInt(PREF_BUTTONS_ALPHA, "60");
 	}
 
 	public int getButtonsSize() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_BUTTONS_SIZE, "3")).intValue();
+		return safeInt(PREF_BUTTONS_SIZE, "3");
 	}
 
 	public int getStickSize() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_STICK_SIZE, "3")).intValue();
+		return safeInt(PREF_STICK_SIZE, "3");
 	}
 
 	public int getMainThreadPriority() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_MAIN_THREAD_PRIORITY, "2")).intValue();
+		return safeInt(PREF_MAIN_THREAD_PRIORITY, "2");
 	}
 
 	public int getSoundEngine() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_SOUND_ENGINE, "1")).intValue();
+		return safeInt(PREF_SOUND_ENGINE, "1");
 	}
 
 	public boolean isAltGLPath() {
@@ -788,7 +805,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	/*public int getEffectOverlayIntensity(){
-		return Integer.valueOf(getSharedPreferences().getString(PREF_OVERLAY_INTENSITY,"3")).intValue();
+		return safeInt(PREF_OVERLAY_INTENSITY, "3");
 	}*/
 
 	public int getNavBarMode() {
@@ -800,7 +817,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 			edit.commit();
 		}
 
-		return Integer.valueOf(getSharedPreferences().getString(PREF_GLOBAL_NAVBAR_MODE, "1")).intValue();
+		return safeInt(PREF_GLOBAL_NAVBAR_MODE, "1");
 	}
 
 	public boolean isDefaultData() {
@@ -877,7 +894,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	}
 
 	public int getNetplayDelayValue() {
-		return Integer.valueOf(getSharedPreferences().getString(PREF_NETPLAY_DELAY, "0"));
+		return safeInt(PREF_NETPLAY_DELAY, "0");
 	}
 
 	public boolean isNetplayStatsEnabled() {
@@ -895,7 +912,7 @@ public class PrefsHelper implements OnSharedPreferenceChangeListener {
 	/** 0 = IPv4 (default), 1 = IPv6, 2 = Auto (matches Emulator.netplaySetIpFamily). */
 	public int getNetplayIpProtocol() {
 		try {
-			return Integer.parseInt(getSharedPreferences().getString(PREF_NETPLAY_IP_PROTOCOL, "0"));
+			return safeInt(PREF_NETPLAY_IP_PROTOCOL, "0");
 		} catch (Exception e) {
 			return 0;
 		}

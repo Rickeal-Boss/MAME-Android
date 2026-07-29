@@ -519,43 +519,41 @@ public class Emulator {
 
 	static public void initInput() {
 		Log.d("initInput", "initInput isInGame:" + isInGame() + " isInMenu:" + isInMenu());
-		mm.runOnUiThread(new Runnable() {
+		// The 100ms pause let the UI settle before the hint toast, but a sleep on the
+		// UI thread risks jank/ANR. Defer the work on the main looper instead of blocking it.
+		final MAME4droid activity = mm;
+		new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
 			public void run() {
-				try {
-					Thread.sleep(100);
-				} catch (InterruptedException e) {
-					throw new RuntimeException(e);
-				}
-				if ( /*Emulator.getValue(Emulator.IN_GAME) == 1 && Emulator.getValue(Emulator.IN_MENU) == 0
-					&&*/ (((mm.getPrefsHelper().isTouchLightgun() || mm.getPrefsHelper().isTouchGameMouse())
-					&& mm.getInputHandler()
-					.getTouchController().getState() != TouchController.STATE_SHOWING_NONE) || mm
+				if (activity == null) return;
+				if ((((activity.getPrefsHelper().isTouchLightgun() || activity.getPrefsHelper().isTouchGameMouse())
+					&& activity.getInputHandler()
+					.getTouchController().getState() != TouchController.STATE_SHOWING_NONE) || activity
 					.getPrefsHelper().isTiltSensorEnabled())) {
 
 					CharSequence text = "";
-					if (mm.getPrefsHelper().isTiltSensorEnabled())
-						text = mm.getString(R.string.tilt_sensor_enabled);
-					else if (mm.getPrefsHelper().isTouchLightgun()) {
-						if(mm.getPrefsHelper().isTouchLightgunForced())
-							text = mm.getString(R.string.touch_lightgun_always);
+					if (activity.getPrefsHelper().isTiltSensorEnabled())
+						text = activity.getString(R.string.tilt_sensor_enabled);
+					else if (activity.getPrefsHelper().isTouchLightgun()) {
+						if(activity.getPrefsHelper().isTouchLightgunForced())
+							text = activity.getString(R.string.touch_lightgun_always);
 							else
-							text = mm.getString(R.string.touch_lightgun_auto);
+							text = activity.getString(R.string.touch_lightgun_auto);
 					}
-					else if (mm.getPrefsHelper().isTouchGameMouse()) {
-						if(mm.getPrefsHelper().isTouchGameMouseForced())
-							text = mm.getString(R.string.touch_mouse_always);
+					else if (activity.getPrefsHelper().isTouchGameMouse()) {
+						if(activity.getPrefsHelper().isTouchGameMouseForced())
+							text = activity.getString(R.string.touch_mouse_always);
 							else
-						    text = mm.getString(R.string.touch_mouse_auto);
+						    text = activity.getString(R.string.touch_mouse_auto);
 					}
 
-					new WarnWidget.WarnWidgetHelper(mm, text.toString(), 3, Color.YELLOW, true);
+					new WarnWidget.WarnWidgetHelper(activity, text.toString(), 3, Color.YELLOW, true);
 
 					Log.d("initInput", "virtual device: " + text);
 				}
 
-				mm.getMainHelper().updateMAME4droid();
+				activity.getMainHelper().updateMAME4droid();
 			}
-		});
+		}, 100);
 	}
 
 	//SOUND
